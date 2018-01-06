@@ -81,8 +81,9 @@ class dataset_mnist32x32_test(dataset_mnist32x32_train):
             _, _, testset = pickle.load(f, encoding='latin1')
         images, labels = testset
         images = images.reshape((images.shape[0], 1, 32, 32))
-        if self.use_inversion == 1:
-            images = np.concatenate((images, 1 - images), axis=0)
-            labels = np.concatenate((labels, labels), axis=0)
+        # we do not invert the test set
+        # if self.use_inversion == 1:
+        #     images = np.concatenate((images, 1 - images), axis=0)
+        #     labels = np.concatenate((labels, labels), axis=0)
         images = (images - 0.5) * 2
         return np.float32(images), labels
