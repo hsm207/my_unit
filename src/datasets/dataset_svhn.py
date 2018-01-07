@@ -94,6 +94,7 @@ class dataset_svhn_extra:
 
         # do not download and load the matlab version of svhn if the tf records version exists
         if os.path.isfile(full_filepath_tf_rec):
+            print(f'{full_filepath_tf_rec} exists')
             return
 
         self._download(full_filepath_mat, self.url)
