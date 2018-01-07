@@ -75,7 +75,7 @@ class img_to_tf_record_writer:
 
         label = tf.cast(features['label'], tf.int32)
 
-        return image, label, features['depth'], features['height'], features['width']
+        return image, label
 
 
 class dataset_svhn_extra:
