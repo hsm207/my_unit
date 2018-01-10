@@ -5,6 +5,7 @@ from tensorflow.python.keras.layers import Conv2D, MaxPooling2D, Dropout
 # Coupled discriminator model for digit classification (Appendix B, Table 6)
 class CoDis32x32:
 
+    # TODO: Rewrite this layer into a separate class
     def _conv2d(self, n_filters, kernel_size, max_pool_stride, conv_padding):
         """
         Returns a layer that applies a 2D convolution followed by a max pool operation.
