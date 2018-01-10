@@ -133,7 +133,7 @@ class CoDis32x32:
     def classify_image_b(self, image_b):
         """
         Classifies image from domain B
-        :param image_a: A tensor representing images from domain B (including batch size0
+        :param image_b: A tensor representing images from domain B (including batch size0
         :return: A tensor of shape (batch size, 10) representing the logits for each image
         """
         h0_b = self.conv0_b(image_b)
