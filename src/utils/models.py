@@ -1,10 +1,13 @@
 import tensorflow as tf
-from tensorflow.python.keras.layers import Conv2D, MaxPooling2D, Dropout
+from tensorflow.python.keras.layers import Conv2D, MaxPooling2D, Dropout, Conv2DTranspose, Activation
+
+from utils.layers import LeakyReLUBNNSConv2d, GaussianVAE2D, LeakyReLUBNNSConvTranspose2d
 
 
 # Coupled discriminator model for digit classification (Appendix B, Table 6)
 class CoDis32x32:
 
+    # TODO: Rewrite this layer into a separate class
     def _conv2d(self, n_filters, kernel_size, max_pool_stride, conv_padding):
         """
         Returns a layer that applies a 2D convolution followed by a max pool operation.
@@ -132,7 +135,7 @@ class CoDis32x32:
     def classify_image_b(self, image_b):
         """
         Classifies image from domain B
-        :param image_a: A tensor representing images from domain B (including batch size0
+        :param image_b: A tensor representing images from domain B (including batch size0
         :return: A tensor of shape (batch size, 10) representing the logits for each image
         """
         h0_b = self.conv0_b(image_b)
@@ -141,3 +144,106 @@ class CoDis32x32:
         h4_b = tf.squeeze(h4_b)
 
         return h4_b
+
+
+# Coupled generator model for digit classification (Appendix B, Table 4)
+class CoVAE32x32:
+    def __init__(self, data_format='channels_first', domain_a_image_channels=3, domain_b_image_channels=1):
+        # Encoding layers
+        self.g_en_conv0_a = tf.make_template('conv0_a',
+                                             LeakyReLUBNNSConv2d(n_filters=64, kernel_size=(5, 5), stride=(2, 2),
+                                                                 padding='same', data_format=data_format))
+        self.g_en_conv0_b = tf.make_template('conv0_b',
+                                             LeakyReLUBNNSConv2d(n_filters=64, kernel_size=(5, 5), stride=(2, 2),
+                                                                 padding='same', data_format=data_format))
+        self.g_en_conv1 = tf.make_template('conv1',
+                                           LeakyReLUBNNSConv2d(n_filters=128, kernel_size=(5, 5), stride=(2, 2),
+                                                               padding='same', data_format=data_format))
+        self.g_en_conv2 = tf.make_template('conv2',
+                                           LeakyReLUBNNSConv2d(n_filters=256, kernel_size=(8, 8), stride=(1, 1),
+                                                               padding='valid', data_format=data_format))
+        self.g_en_conv3 = tf.make_template('conv3',
+                                           LeakyReLUBNNSConv2d(n_filters=512, kernel_size=(1, 1), stride=(1, 1),
+                                                               padding='valid', data_format=data_format))
+
+        # Layer to generate the latent variables
+        self.g_vae = tf.make_template('vae',
+                                      GaussianVAE2D(n_filters=512, kernel_size=(1, 1), stride=(1, 1), padding='valid',
+                                                    data_format=data_format))
+
+        # Decoding layers
+        # We will reconstruct the images using transposed convolutional layers followed by a tanh activation function
+        # because the input image has been normalized such that the value of any pixel is between -1 and 1.
+        self.g_de_conv0 = tf.make_template('de_conv0',
+                                           LeakyReLUBNNSConvTranspose2d(n_filters=512, kernel_size=(4, 4),
+                                                                        stride=(2, 2),
+                                                                        padding='valid', data_format=data_format))
+
+        self.g_de_conv1 = tf.make_template('de_conv1',
+                                           LeakyReLUBNNSConvTranspose2d(n_filters=256, kernel_size=(4, 4),
+                                                                        stride=(2, 2),
+                                                                        padding='same', data_format=data_format))
+
+        self.g_de_conv2 = tf.make_template('de_conv2',
+                                           LeakyReLUBNNSConvTranspose2d(n_filters=128, kernel_size=(4, 4),
+                                                                        stride=(2, 2),
+                                                                        padding='same', data_format=data_format))
+
+        self.g_de_conv3_a = tf.make_template('de_conv3_a',
+                                             LeakyReLUBNNSConvTranspose2d(n_filters=64, kernel_size=(4, 4),
+                                                                          stride=(2, 2),
+                                                                          padding='same', data_format=data_format))
+
+        self.g_de_conv3_b = tf.make_template('de_conv3_b',
+                                             LeakyReLUBNNSConvTranspose2d(n_filters=64, kernel_size=(4, 4),
+                                                                          stride=(2, 2),
+                                                                          padding='same', data_format=data_format))
+
+        self.de_conv4_a = tf.make_template('de_conv4_a',
+                                           Conv2DTranspose(filters=domain_a_image_channels, kernel_size=(1, 1),
+                                                           strides=(1, 1), padding='valid', data_format=data_format))
+
+        self.de_conv4_b = tf.make_template('de_conv4_b',
+                                           Conv2DTranspose(filters=domain_b_image_channels, kernel_size=(1, 1),
+                                                           strides=(1, 1), padding='valid', data_format=data_format))
+
+        self.tanh_a = tf.make_template('tanh_a', Activation('tanh'))
+        self.tanh_b = tf.make_template('tanh_b', Activation('tanh'))
+
+    def __call__(self, image_a, image_b):
+        with tf.name_scope('Encoding_Layer'):
+            en_h0_a = self.g_en_conv0_a(image_a)
+            en_h0_b = self.g_en_conv0_b(image_b)
+
+            en_h0 = tf.concat([en_h0_a, en_h0_b], axis=0)
+            en_h1 = self.g_en_conv1(en_h0)
+            en_h2 = self.g_en_conv2(en_h1)
+            en_h3 = self.g_en_conv3(en_h2)
+
+        with tf.name_scope('Latent_Layer'):
+            z, mu, sd = self.g_vae(en_h3)
+
+        with tf.name_scope("Decoding_Layer"):
+            de_h0 = self.g_de_conv0(z)
+            de_h1 = self.g_de_conv1(de_h0)
+            de_h2 = self.g_de_conv2(de_h1)
+
+            de_h3_a = self.g_de_conv3_a(de_h2)
+            de_h3_b = self.g_de_conv3_b(de_h2)
+
+            # Since we stacked image_a and image_b together in en_h0, the first batch_size images in de_h4_a
+            # will contain the reconstructed images of image_a and the next batch_size images are the translation
+            # from image_a to an image in domain b
+            de_h4_a = self.de_conv4_a(de_h3_a)
+            de_h4_a = self.tanh_a(de_h4_a)
+
+            # Similarly, the first batch_size images in de_h4_b will contain the reconstructed images of image_b and
+            # the next batch_size images are the translation from image_b to an image in domain a
+            de_h4_b = self.de_conv4_b(de_h3_b)
+            de_h4_b = self.tanh_b(de_h4_b)
+
+            img_aa, img_ab = tf.split(de_h4_a, 2, axis=0)
+            img_bb, img_ba = tf.split(de_h4_b, 2, axis=0)
+            distribution_params = (mu, sd)
+
+        return img_aa, img_ab, img_bb, img_ba, distribution_params
