@@ -48,8 +48,9 @@ class GaussianVAE2D:
     This layer uses convolutional layers to generate the mean and standard deviation for each of the component of
     the given input tensor.
 
-    The mean and standard deviation for each component is assumed to be independent. The forward pass returns a
-    tuple of the form:
+    The mean and standard deviation for each component is assumed to be independent.
+
+    The forward pass returns a tuple of the form:
 
         (independent random samples from a normal distribution using the generated mean and sd from the input tensor
         aka the latent variables of the input tensors,
