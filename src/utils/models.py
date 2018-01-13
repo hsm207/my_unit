@@ -152,6 +152,7 @@ class CoDis32x32:
 
 # Coupled generator model for digit classification (Appendix B, Table 4)
 class CoVAE32x32:
+    # TODO: Document this model
     def __init__(self, data_format='channels_first', domain_a_image_channels=3, domain_b_image_channels=1):
         # Encoding layers
         self.g_en_conv0_a = tf.make_template('conv0_a',
