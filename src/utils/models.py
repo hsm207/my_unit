@@ -1,7 +1,11 @@
+from itertools import product
+
+import numpy as np
 import tensorflow as tf
 from tensorflow.python.keras.layers import Conv2D, MaxPooling2D, Dropout, Conv2DTranspose, Activation
 
 from utils.layers import LeakyReLUBNNSConv2d, GaussianVAE2D, LeakyReLUBNNSConvTranspose2d
+from utils.losses import MSE_Images
 
 
 # Coupled discriminator model for digit classification (Appendix B, Table 6)
@@ -247,3 +251,66 @@ class CoVAE32x32:
             distribution_params = (mu, sd)
 
         return img_aa, img_ab, img_bb, img_ba, distribution_params
+
+
+# Model to use the unsupervised image-to-image translation framework to do domain adaptation from the SHVN dataset
+# to the MNIST dataset.
+class UNIT_DA_SHVN_TO_MNIST:
+    def __init__(self, svhn_images_channels=3, mnist_image_channels=1, data_format='channels_first', batch_size=64):
+        # Create the discriminator and generator model
+        self.gen = tf.make_template('Generator', CoVAE32x32(data_format=data_format,
+                                                            domain_a_image_channels=svhn_images_channels,
+                                                            domain_b_image_channels=mnist_image_channels))
+        self.dis = tf.make_template('Discriminator', CoDis32x32(data_format=data_format))
+
+        # Create the optimizers for the discriminator and generator
+        # TODO: Figure out how to do L2 regularization
+        # Note that the decay parameter in pytorch is not learning rate decay!
+        self.opt_gen = tf.train.AdamOptimizer(learning_rate=0.0002, beta1=0.5, beta2=0.999)
+        self.opt_dis = tf.train.AdamOptimizer(learning_rate=0.0002, beta1=0.5, beta2=0.999)
+
+        # We use the MSE loss to compute the loss between a real image and a generated image within the same domain
+        # i.e. real image A and reconstructed image A
+        # In the Auto-Encoding Variational Bayes paper (arXiv:1312.6114v10), this should be the log likelihood of the image given its latent
+        # variable
+        self.ll_loss_criterion = tf.make_template('ll_loss_mse', MSE_Images())
+
+        # Create the normalized x and y coordinates feature. This is not part of the preprocessing step
+        # because it is the same for all images
+        self.xy_normalized = self._create_xy_image(width=32, data_format=data_format, batch_size=batch_size)
+
+    def _create_xy_image(self, width=32, data_format='channels_first', batch_size=64):
+        """
+        Create the normalized x and y coordinates features. See Appendix B, section SVHN->MNIST
+
+        :param width: Height and Width of the x and y plane
+        :param data_format: data format of the input image
+        :param batch_size: batch size of the inputs to the model
+        :return: A tensor with shape (batch_size, 2, height, width) if data_format='channels_first' or
+                (batch_size, height, width, 2) if data_format='channels_last'
+        """
+        # Create the array of coordinates (one channel for x and y)
+        coordinates = list(product(range(width), range(width)))
+        coordinates = np.array(coordinates).reshape((width, width, 2))
+
+        # Normalize the coordinates
+        coordinates = (coordinates - width / 2) / (width / 2)
+
+        # Switch the channels axis if data_format is channels_first
+        coordinates = np.transpose(coordinates, [2, 0, 1]) if data_format == 'channels_first' else coordinates
+
+        # Replicate this array batch_size times
+        coordinates = np.expand_dims(coordinates, 0)
+        coordinates = np.tile(coordinates, (batch_size, 1, 1, 1))
+
+        coordinates = tf.constant(coordinates, tf.float32)
+
+        return coordinates
+
+    def update_discriminator(self, images_a, images_b, labels_a, loss_wt_gan=1.0, loss_wt_class=10.0,
+                             loss_wt_feature=1):
+        # Forward Pass
+        # Step 1. Perform the forward pass on the real image pairs
+        real_logits, real_img_a_feat, real_img_b_feat = self.dis(images_a, images_b)
+
+        return real_logits
