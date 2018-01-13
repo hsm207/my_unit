@@ -238,17 +238,17 @@ class CoVAE32x32:
 
             # Since we stacked image_a and image_b together in en_h0, the first batch_size images in de_h4_a
             # will contain the reconstructed images of image_a and the next batch_size images are the translation
-            # from image_a to an image in domain b
+            # from image_b to an image in domain a
             de_h4_a = self.de_conv4_a(de_h3_a)
             de_h4_a = self.tanh_a(de_h4_a)
 
-            # Similarly, the first batch_size images in de_h4_b will contain the reconstructed images of image_b and
-            # the next batch_size images are the translation from image_b to an image in domain a
+            # Similarly, the first batch_size images in de_h4_b will contain the translation from image_a to an image
+            # in domain b and the next batch_size images are the reconstructed images of image_b
             de_h4_b = self.de_conv4_b(de_h3_b)
             de_h4_b = self.tanh_b(de_h4_b)
 
-            img_aa, img_ab = tf.split(de_h4_a, 2, axis=0)
-            img_bb, img_ba = tf.split(de_h4_b, 2, axis=0)
+            img_aa, img_ba = tf.split(de_h4_a, 2, axis=0)
+            img_ab, img_bb = tf.split(de_h4_b, 2, axis=0)
             distribution_params = (mu, sd)
 
         return img_aa, img_ab, img_bb, img_ba, distribution_params
