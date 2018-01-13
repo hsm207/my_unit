@@ -34,3 +34,16 @@ class Batch_Cross_Entropy():
         mean_loss = tf.reduce_mean(tf.reduce_mean(loss_per_observation))
 
         return mean_loss
+
+
+class L2_Regularization():
+    def __call__(self, weights):
+        """
+        Computes the L2 Regularization for a given list of weights
+        :param weights: List of tensors representing the weights of a model we want to compute the L2 regularization
+        :return: A scalar representing the total L2 regularization of weights
+        """
+        l2_losses = [tf.nn.l2_loss(wt) for wt in weights]
+        total_l2_loss = tf.add_n(l2_losses)
+
+        return total_l2_loss
