@@ -28,8 +28,8 @@ def train_input_fn_builder(subset=(-1, -1)):
             .batch(64)
 
         ds = tf.data.Dataset.zip((ds_domain_1, ds_domain_2))
-        (image_domain1, label_domain1), (label_domain2, label_domain2) = ds.make_one_shot_iterator().get_next()
-        return {'image1': image_domain1, 'image2': label_domain2}, {'label1': label_domain1, 'label2': label_domain2}
+        (image_domain1, label_domain1), (image_domain2, label_domain2) = ds.make_one_shot_iterator().get_next()
+        return {'image1': image_domain1, 'image2': image_domain2}, {'label1': label_domain1, 'label2': label_domain2}
 
     return train_input_fn()
 
