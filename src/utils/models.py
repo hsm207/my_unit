@@ -5,7 +5,7 @@ import tensorflow as tf
 from tensorflow.python.keras.layers import Conv2D, MaxPooling2D, Dropout, Conv2DTranspose, Activation
 
 from utils.layers import LeakyReLUBNNSConv2d, GaussianVAE2D, LeakyReLUBNNSConvTranspose2d
-from utils.losses import MSE_Images
+from utils.losses import MSE_Images, Batch_Cross_Entropy, L2_Regularization, KL_Divergence
 
 
 # Coupled discriminator model for digit classification (Appendix B, Table 6)
@@ -258,11 +258,16 @@ class CoVAE32x32:
 # to the MNIST dataset.
 class UNIT_DA_SHVN_TO_MNIST:
     def __init__(self, svhn_images_channels=3, mnist_image_channels=1, data_format='channels_first', batch_size=64):
+        self.channel_axis = 1 if data_format == 'channels_first' else 3
+
         # Create the discriminator and generator model
         self.gen = tf.make_template('Generator', CoVAE32x32(data_format=data_format,
                                                             domain_a_image_channels=svhn_images_channels,
                                                             domain_b_image_channels=mnist_image_channels))
-        self.dis = tf.make_template('Discriminator', CoDis32x32(data_format=data_format))
+        dis = CoDis32x32(data_format=data_format)
+        self.dis = tf.make_template('', dis, unique_name_='Discriminator')
+        self.classify_image_a = tf.make_template('', dis.classify_image_a, unique_name_='Discriminator')
+        self.classify_image_b = tf.make_template('', dis.classify_image_b, unique_name_='Discriminator')
 
         # Create the optimizers for the discriminator and generator
         # TODO: Figure out how to do L2 regularization
@@ -270,11 +275,22 @@ class UNIT_DA_SHVN_TO_MNIST:
         self.opt_gen = tf.train.AdamOptimizer(learning_rate=0.0002, beta1=0.5, beta2=0.999)
         self.opt_dis = tf.train.AdamOptimizer(learning_rate=0.0002, beta1=0.5, beta2=0.999)
 
+        # Losses
+
         # We use the MSE loss to compute the loss between a real image and a generated image within the same domain
         # i.e. real image A and reconstructed image A
-        # In the Auto-Encoding Variational Bayes paper (arXiv:1312.6114v10), this should be the log likelihood of the image given its latent
-        # variable
+        # In the Auto-Encoding Variational Bayes paper (arXiv:1312.6114v10), this should be the log likelihood of the
+        # image given its latent variable.
+        # Since the likelihood function is modelled using a Laplacian distribution, the authors in this paper claim that
+        # minimizing the log likelihood is the same as minimizing the distance between the image and the reconstructed
+        # image.
         self.ll_loss_criterion = tf.make_template('ll_loss_mse', MSE_Images())
+
+        self.batch_cross_entropy = tf.make_template('batch_cross_entropy', Batch_Cross_Entropy())
+
+        self.l2_reg = tf.make_template('L2_regularization', L2_Regularization())
+
+        self.kl_div = tf.make_template('KL_divergence', KL_Divergence())
 
         # Create the normalized x and y coordinates feature. This is not part of the preprocessing step
         # because it is the same for all images
@@ -309,9 +325,118 @@ class UNIT_DA_SHVN_TO_MNIST:
         return coordinates
 
     def update_discriminator(self, images_a, images_b, labels_a, loss_wt_gan=1.0, loss_wt_class=10.0,
-                             loss_wt_feature=1):
+                             loss_wt_feature=1, loss_wt_l2=0.0005):
         # Forward Pass
-        # Step 1. Perform the forward pass on the real image pairs
+        # Step 1. Feed the Discriminator with real image pairs
         real_logits, real_img_a_feat, real_img_b_feat = self.dis(images_a, images_b)
 
-        return real_logits
+        # Step 2. Compute the cross entropy loss on the Discriminator's ability to identify real images
+        # Since the images fed into the Discriminator were real images (both in domain a and domain b), the
+        # ground truth is 1 (real image)
+        # We call this loss the adversarial real loss
+        real_labels = tf.ones(real_logits.get_shape()[0], tf.int32)
+        ad_real_loss = self.batch_cross_entropy(real_labels, real_logits)
+
+        # Step 3. Feed the Discriminator with fake image pairs
+        # We will generate the faka images by feeding the Generator with real images that has been augmented
+        # with the normalized x and y coordinates
+        img_a_xy = tf.concat([images_a, self.xy_normalized], axis=self.channel_axis, name='img_a_augment')
+        img_b_xy = tf.concat([images_b, self.xy_normalized], axis=self.channel_axis, name='img_b_augment')
+
+        fake_img_aa, fake_img_ab, fake_img_bb, fake_img_ba, latent_codes = self.gen(img_a_xy, img_b_xy)
+
+        # Feed the Discriminator with the fake reconstructed images followed by the fake translated images
+        fake_recon_logits, fake_img_aa_feat, fake_img_bb_feat = self.dis(fake_img_aa, fake_img_bb)
+        fake_trans_logits, fake_img_ba_feat, fake_img_ab_feat = self.dis(fake_img_ba, fake_img_ab)
+
+        # Step 4. Compute the cross entropy loss on the Discriminator's ability to identify fake images
+        # Since the images fed into the Discriminator were fake images (both in domain a and domain b), the
+        # ground truth is 0 (fake image)
+        # We call this loss the adversarial fake loss, which is the average of the adversarial reconstructed loss
+        # and the adversarial translation loss
+        fake_labels = tf.zeros(fake_recon_logits.get_shape()[0], tf.int32)
+        ad_fake_recon_loss = self.batch_cross_entropy(fake_labels, fake_recon_logits)
+        ad_fake_trans_loss = self.batch_cross_entropy(fake_labels, fake_trans_logits)
+        ad_fake_loss = 0.5 * (ad_fake_recon_loss + ad_fake_trans_loss)
+
+        # Step 5. Compute the L2 distance (not L1, typo in paper) between the features extracted by the highest layer of the discriminators
+        # for a pair of generated images. This further encourages the Discriminator to interpret a pair of corresponding
+        # images in the same way (see Domain Adaptation section in the paper).
+        # Intuition:
+        # Suppose we have image a and we feed this to the Generator. Then, we will have the reconstructed version of
+        # image a and the translated (and hopefully correct) version of image a. If we feed these two images to the
+        # Discriminator, it must produce similar features because it originated from image a so that if it can
+        # correctly classify the image in domain a, it should be able to correctly classify the corresponding image
+        # in domain b.
+        # The ground truth is the 0 feature map because if the extracted features are similar, then their difference
+        # should be close to 0.
+        zero_feat_map = tf.zeros(fake_img_aa_feat.get_shape(), tf.float32)
+        feat_loss_a = self.ll_loss_criterion(zero_feat_map, fake_img_aa_feat - fake_img_ab_feat)
+        feat_loss_b = self.ll_loss_criterion(zero_feat_map, fake_img_ba_feat - fake_img_bb_feat)
+
+        # Step 6. Compute the Discriminator's classification loss on domain a
+        cls_logits = self.classify_image_a(images_a)
+        cls_loss = self.batch_cross_entropy(labels_a, cls_logits)
+
+        # Step 7. Compute the Discriminator's total loss
+        total_loss = loss_wt_gan * (ad_real_loss + ad_fake_loss) \
+                     + loss_wt_class * cls_loss \
+                     + loss_wt_feature * (feat_loss_a + feat_loss_b) \
+                     + loss_wt_l2 * self.l2_reg(tf.trainable_variables(scope="Discriminator"))
+
+        # Name the loss for logging purposes
+        tf.identity(total_loss, 'loss_discriminator')
+
+        return total_loss
+
+    def update_generator(self, images_a, images_b, loss_wt_gan=1.0, loss_wt_kl=0.0001, loss_wt_ll=0.001,
+                         loss_wt_l2=0.0005):
+        # Step 1: Augment the real images with the normalized x and y coordinates
+        img_a_xy = tf.concat([images_a, self.xy_normalized], axis=self.channel_axis)
+        img_b_xy = tf.concat([images_b, self.xy_normalized], axis=self.channel_axis)
+
+        # Step 2: Generate the fake images from the real images (reconstructed and translated)
+        fake_img_aa, fake_img_ab, fake_img_bb, fake_img_ba, latent_codes = self.gen(img_a_xy, img_b_xy)
+
+        # Step 3: Pass the fake images to the Discriminator in two sets, the first set is the set of
+        # reconstructed images and the other set is the set of translated images
+        fake_recon_logits, _, _ = self.dis(fake_img_aa, fake_img_bb)
+        fake_trans_logits, _, _ = self.dis(fake_img_ba, fake_img_ab)
+
+        # Step 4: Compute the Generator's loss from trying to fool the Discriminator
+        # Since the goal of the Generator is to fool the Discriminator, the ground truth in both sets is 1 i.e.
+        # the Discriminator thinks that the images are real
+        fake_labels = tf.ones(fake_recon_logits.get_shape()[0], tf.int32)
+        ad_fake_recon_loss = self.batch_cross_entropy(fake_labels, fake_recon_logits)
+        ad_fake_trans_loss = self.batch_cross_entropy(fake_labels, fake_trans_logits)
+        ad_loss = ad_fake_recon_loss + ad_fake_trans_loss
+
+        # Step 5: Compute the losses for the VAE part of the Generator
+        # The reconstruction loss for image a
+        ll_loss_a = self.ll_loss_criterion(images_a, fake_img_aa)
+
+        # The reconstruction loss for image b
+        ll_loss_b = self.ll_loss_criterion(images_b, fake_img_bb)
+
+        ll_loss = ll_loss_a + ll_loss_b
+
+        # Compute the KL divergence
+        kl_div = self.kl_div(*latent_codes)
+
+        total_loss = loss_wt_gan * ad_loss \
+                     + loss_wt_kl * kl_div \
+                     + loss_wt_ll * ll_loss \
+                     + loss_wt_l2 * self.l2_reg(tf.trainable_variables(scope='Generator'))
+
+        return total_loss, fake_img_aa, fake_img_ba, fake_img_ab, fake_img_bb
+
+    def get_train_op(self, loss_fn_generator, loss_fn_discriminator):
+        train_op_generator = self.opt_gen.minimize(loss_fn_generator, global_step=tf.train.get_or_create_global_step(),
+                                                   var_list=tf.trainable_variables(scope='Generator'))
+
+        train_op_discriminator = self.opt_dis.minimize(loss_fn_discriminator, global_step=None,
+                                                       var_list=tf.trainable_variables(scope='Discriminator'))
+
+        train_op = tf.group(train_op_discriminator, train_op_generator)
+
+        return train_op
