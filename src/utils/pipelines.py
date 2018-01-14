@@ -39,7 +39,7 @@ def train_input_fn_builder(subset=(-1, -1), data_format='channels_first'):
         (image_domain1, label_domain1), (image_domain2, label_domain2) = ds.make_one_shot_iterator().get_next()
         return {'image1': image_domain1, 'image2': image_domain2}, {'label1': label_domain1, 'label2': label_domain2}
 
-    return train_input_fn()
+    return train_input_fn
 
 
 def test_input_fn_builder(subset=-1, data_format='channels_first'):
