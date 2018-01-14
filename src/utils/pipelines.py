@@ -27,7 +27,10 @@ def train_input_fn_builder(subset=(-1, -1)):
             .shuffle(buffer_size=120000) \
             .batch(64)
 
-        ds = tf.data.Dataset.zip((ds_domain_1, ds_domain_2))
+        # Train the model only on batches where the number of images in both domains are equal
+        ds = tf.data.Dataset.zip((ds_domain_1, ds_domain_2)) \
+            .filter(lambda domain_a, domain_b: tf.equal(tf.shape(domain_a[0])[0], tf.shape(domain_b[0])[0]))
+
         (image_domain1, label_domain1), (image_domain2, label_domain2) = ds.make_one_shot_iterator().get_next()
         return {'image1': image_domain1, 'image2': image_domain2}, {'label1': label_domain1, 'label2': label_domain2}
 
@@ -42,6 +45,7 @@ def test_input_fn_builder(subset=-1):
             {'image': images from the MNIST test set},
             {'label': corresponding labels of the images from the MNIST test set}
     """
+
     def test_input_fn():
         ds = dataset_mnist32x32_test().dataset() \
             .take(subset) \
