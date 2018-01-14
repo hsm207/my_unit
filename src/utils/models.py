@@ -337,7 +337,7 @@ class UNIT_DA_SHVN_TO_MNIST:
         # Since the images fed into the Discriminator were real images (both in domain a and domain b), the
         # ground truth is 1 (real image)
         # We call this loss the adversarial real loss
-        real_labels = tf.ones(real_logits.get_shape()[0], tf.int32)
+        real_labels = tf.ones(64, tf.int32)
         ad_real_loss = self.batch_cross_entropy(real_labels, real_logits)
 
         # Step 3. Feed the Discriminator with fake image pairs
