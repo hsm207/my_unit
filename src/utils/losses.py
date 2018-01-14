@@ -47,3 +47,34 @@ class L2_Regularization():
         total_l2_loss = tf.add_n(l2_losses)
 
         return total_l2_loss
+
+class KL_Divergence():
+    def __call__(self, mu, sd):
+        """
+        Computes the mean KL divergence term for the Generator's VAE loss
+
+        Let z be the latent variables produced by the Generator.
+
+        This implementation assumes that the posterior distribution of z, p(z|x) follows a
+        Gaussian distribution (x is the observed image) and the prior distribution of z, p(z)
+        follows a standard normal distribution
+
+        The formula is derived from Appendix B in the Auto-Encoding Variational Bayes paper
+        (arXiv:1312.6114v10). We compute Dkl instead of -Dkl because maximizing -Dkl is the
+        same as minimizing Dkl.
+
+        Note that each component of z is assumed to be independent of each other.
+
+        :param mu: A tensor of shape (batch_size, 1, 1, dimension_of_latent_variables) representing the mean
+                   of each component of z
+        :param sd: A tensor of shape (batch_size, 1, 1, dimension_of_latent_variables) representing the
+                      standard deviation of each component of z
+        :return: A scalar representing mean KL divergence of the given batch
+        """
+
+        batch_size = mu.get_shape()[0].value
+        mu_2 = tf.square(mu)
+        sd_2 = tf.square(sd)
+        kl_divergence = 0.5 * tf.reduce_sum(-1 - tf.log(sd_2) + mu_2 + sd_2)/batch_size
+
+        return kl_divergence
