@@ -7,8 +7,8 @@ from datasets.dataset_svhn import dataset_svhn_extra
 def train_input_fn_builder(subset=(-1, -1), data_format='channels_first'):
     """
     Build a function to feed the estimator data during training
-
     :param subset: A tuple of the form (number of images to use from domain 1, number of images to use from domain2)
+    :param data_format: A string specifying whether the images should be channels_first or channels_last format
     :return: A function that takes no arguments and returns a tuple of dictionaries of the form:
             {image1: images from the svhn domain,
              image2: images from the mnist domain},
@@ -46,7 +46,8 @@ def test_input_fn_builder(subset=-1, data_format='channels_first'):
     """
     Build a function to feed the estimator data during testing
     :param subset: An integer representing the number of images to use from the MNIST test set
-    :return: A tuple of dictionaries of the form:
+    :param data_format: A string specifying whether the images should be channels_first or channels_last format
+    :return: A function that takes no arguments and returns a tuple of dictionaries of the form:
             {'image': images from the MNIST test set},
             {'label': corresponding labels of the images from the MNIST test set}
     """
