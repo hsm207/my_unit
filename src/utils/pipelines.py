@@ -4,7 +4,7 @@ from datasets.dataset_mnist import dataset_mnist32x32_train, dataset_mnist32x32_
 from datasets.dataset_svhn import dataset_svhn_extra
 
 
-def train_input_fn_builder(subset=(-1, -1)):
+def train_input_fn_builder(subset=(-1, -1), data_format='channels_first'):
     """
     Build a function to feed the estimator data during training
 
@@ -17,6 +17,7 @@ def train_input_fn_builder(subset=(-1, -1)):
     """
 
     def train_input_fn():
+        # Note: The format of the images stored in the dataset files is channels_first
         n_domain1, n_domain2 = subset
         ds_domain_1 = dataset_svhn_extra().dataset() \
             .take(n_domain1) \
@@ -26,6 +27,10 @@ def train_input_fn_builder(subset=(-1, -1)):
             .take(n_domain2) \
             .shuffle(buffer_size=120000) \
             .batch(64)
+
+        if data_format == 'channels_last':
+            ds_domain_1 = ds_domain_1.map(lambda img, lab: (tf.transpose(img, (0, 2, 3, 1)), lab))
+            ds_domain_2 = ds_domain_2.map(lambda img, lab: (tf.transpose(img, (0, 2, 3, 1)), lab))
 
         # Train the model only on batches where the number of images in both domains are equal
         ds = tf.data.Dataset.zip((ds_domain_1, ds_domain_2)) \
@@ -37,7 +42,7 @@ def train_input_fn_builder(subset=(-1, -1)):
     return train_input_fn()
 
 
-def test_input_fn_builder(subset=-1):
+def test_input_fn_builder(subset=-1, data_format='channels_first'):
     """
     Build a function to feed the estimator data during testing
     :param subset: An integer representing the number of images to use from the MNIST test set
@@ -50,6 +55,9 @@ def test_input_fn_builder(subset=-1):
         ds = dataset_mnist32x32_test().dataset() \
             .take(subset) \
             .batch(100)
+
+        if data_format == 'channels_last':
+            ds = ds.map(lambda img, lab: (tf.transpose(img, (0, 2, 3, 1)), lab))
 
         image, label = ds.make_one_shot_iterator().get_next()
         return {'image': image}, {'label': label}
