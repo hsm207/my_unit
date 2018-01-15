@@ -137,3 +137,27 @@ class dataset_svhn_extra:
         ds = tf.data.TFRecordDataset(full_filepath_tfrec) \
             .map(img_to_tf_record_writer.decode)
         return ds
+
+class dataset_svhn_extra_sample(dataset_svhn_extra):
+    def __init__(self):
+        # Convert the .mat file into a TF record because the Dataset API cannot create tensors greater than 2 GB.
+        # See https://www.tensorflow.org/programmers_guide/datasets#consuming_numpy_arrays for more info
+
+        self.url = 'http://ufldl.stanford.edu/housenumbers/extra_32x32.mat'
+        self.filename_mat = 'extra_32x32.mat'
+        self.filename_tfrec = 'extra_32x32.tfrecords_sample'
+        self.filepath = '../datasets/svhn/'
+
+        full_filepath_mat = os.path.join(self.filepath, self.filename_mat)
+        full_filepath_tf_rec = full_filepath_mat.replace('.mat', '.tfrecords_sample')
+
+        # do not download and load the matlab version of svhn if the tf records version exists
+        if os.path.isfile(full_filepath_tf_rec):
+            print(f'{full_filepath_tf_rec} exists')
+            return
+
+        self._download(full_filepath_mat, self.url)
+        images, labels = self._load_samples(full_filepath_mat)
+
+        img2tf_rec = img_to_tf_record_writer(images[:100], labels[:100], full_filepath_tf_rec)
+        img2tf_rec.encode()
