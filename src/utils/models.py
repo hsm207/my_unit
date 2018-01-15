@@ -296,6 +296,9 @@ class UNIT_DA_SHVN_TO_MNIST:
         # because it is the same for all images
         self.xy_normalized = self._create_xy_image(width=32, data_format=data_format, batch_size=batch_size)
 
+        # Metrics stuff
+        self.softmax = tf.make_template('softmax', Activation('softmax'))
+
     def _create_xy_image(self, width=32, data_format='channels_first', batch_size=64):
         """
         Create the normalized x and y coordinates features. See Appendix B, section SVHN->MNIST
@@ -440,3 +443,24 @@ class UNIT_DA_SHVN_TO_MNIST:
         train_op = tf.group(train_op_discriminator, train_op_generator)
 
         return train_op
+
+    def get_predictions(self, images_b):
+        y_hat_logits = self.classify_image_b(images_b)
+        y_hat_probs = self.softmax(y_hat_logits)
+        y_hat_class = tf.argmax(y_hat_logits, axis=1)
+
+        predictions = {
+            'class': y_hat_class,
+            'prob': y_hat_probs
+        }
+
+        return predictions
+
+    def get_metrics(self, true_label_b, pred_label_b):
+        class_acc = tf.metrics.accuracy(true_label_b, pred_label_b)
+
+        metrics = {
+            'classification_accuracy': class_acc
+        }
+
+        return metrics
