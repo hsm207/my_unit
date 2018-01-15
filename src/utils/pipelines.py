@@ -4,7 +4,7 @@ from datasets.dataset_mnist import dataset_mnist32x32_train, dataset_mnist32x32_
 from datasets.dataset_svhn import dataset_svhn_extra
 
 
-def train_input_fn_builder(subset=(-1, -1), data_format='channels_first'):
+def train_input_fn_builder(subset=(-1, -1), data_format='channels_first', batch_size=64):
     """
     Build a function to feed the estimator data during training
     :param subset: A tuple of the form (number of images to use from domain 1, number of images to use from domain2)
@@ -22,11 +22,11 @@ def train_input_fn_builder(subset=(-1, -1), data_format='channels_first'):
         ds_domain_1 = dataset_svhn_extra().dataset() \
             .take(n_domain1) \
             .shuffle(buffer_size=200000) \
-            .batch(64)
+            .batch(batch_size) \
         ds_domain_2 = dataset_mnist32x32_train().dataset() \
             .take(n_domain2) \
             .shuffle(buffer_size=120000) \
-            .batch(64)
+            .batch(batch_size) \
 
         if data_format == 'channels_last':
             ds_domain_1 = ds_domain_1.map(lambda img, lab: (tf.transpose(img, (0, 2, 3, 1)), lab))
