@@ -1,0 +1,1 @@
+nohup python3 -u cocogan_train_domain_adaptation.py > my_unit.out 2> my_unit.err < /dev/null &
