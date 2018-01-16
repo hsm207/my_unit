@@ -27,11 +27,11 @@ class dataset_mnist32x32_train:
         if not os.path.isdir(dirname):
             os.mkdir(dirname)
         if os.path.isfile(filename):
-            print(f'{filename} exists')
+            print('{} exists'.format(filename))
             return
-        print(f'Download {url} to {filename}')
+        print('Download {} to {}'.format(url, filename))
         urllib.request.urlretrieve(url, filename)
-        print(f'Finish downloading {filename}')
+        print('Finish downloading {filename}'.format(filename))
         print('Resizing images to 32x32')
         self._resize32x32(filename)
 

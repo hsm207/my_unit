@@ -28,12 +28,12 @@ class img_to_tf_record_writer:
 
     def encode(self):
         if os.path.isfile(self.filename):
-            print(f'{self.filename} exists')
+            print('{} exists'.format(self.filename))
             return
 
         num_examples, depth, rows, cols = self.images.shape
 
-        print(f'Converting to TF Record format')
+        print('Converting to TF Record format')
 
         with tf.python_io.TFRecordWriter(self.filename) as writer:
             for i in range(num_examples):
@@ -52,7 +52,7 @@ class img_to_tf_record_writer:
                 )
                 writer.write(example.SerializeToString())
 
-        print(f'Finished converting to TF Record format')
+        print('Finished converting to TF Record format')
 
     @staticmethod
     def decode(serialized_example):
@@ -94,7 +94,7 @@ class dataset_svhn_extra:
 
         # do not download and load the matlab version of svhn if the tf records version exists
         if os.path.isfile(full_filepath_tf_rec):
-            print(f'{full_filepath_tf_rec} exists')
+            print('{} exists'.format(full_filepath_tf_rec))
             return
 
         self._download(full_filepath_mat, self.url)
@@ -108,15 +108,15 @@ class dataset_svhn_extra:
         if not os.path.isdir(dirname):
             os.mkdir(dirname)
         if os.path.isfile(filename):
-            print(f'{filename} exists')
+            print('{} exists'.format(filename))
             return
-        print(f'Downloading {url} to {filename}')
+        print('Downloading {} to {}'.format(url, filename))
         urllib.request.urlretrieve(url, filename)
-        print(f'Finished downloadiang {filename}')
+        print('Finished downloadiang {}'.format(filename))
 
     def _load_samples(self, file_path):
 
-        print(f'Loading {file_path}')
+        print('Loading {}'.format(file_path))
         mat = scipy.io.loadmat(file_path, squeeze_me=True)
         y = mat['y']
         x = mat['X']
@@ -153,7 +153,7 @@ class dataset_svhn_extra_sample(dataset_svhn_extra):
 
         # do not download and load the matlab version of svhn if the tf records version exists
         if os.path.isfile(full_filepath_tf_rec):
-            print(f'{full_filepath_tf_rec} exists')
+            print('{} exists'.format(full_filepath_tf_rec))
             return
 
         self._download(full_filepath_mat, self.url)

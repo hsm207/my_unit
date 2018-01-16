@@ -106,7 +106,7 @@ for i in range(hyper_params['n_epochs']):
 
     if res['classification_accuracy'] > best_accuracy:
         best_accuracy = res['classification_accuracy']
-        print(f'best accuracy is {best_accuracy} and achieved on epoch {i+1}')
+        print('best accuracy is {} and achieved on epoch {}'.format(best_accuracy, i+1))
 
         serv_input_fn = tf.estimator.export.build_raw_serving_input_receiver_fn({
             'image': img_serv
