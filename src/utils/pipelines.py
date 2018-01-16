@@ -22,8 +22,8 @@ def train_input_fn_builder(subset=(-1, -1), data_format='channels_first', batch_
         def set_images_shape(dataset_a, dataset_b):
             (img_a, lab_a), (img_b, lab_b) = dataset_a, dataset_b
 
-            shape_a = (batch_size, *image_a_shape)
-            shape_b = (batch_size, *image_b_shape)
+            shape_a = (batch_size,) + image_a_shape
+            shape_b = (batch_size,) + image_b_shape
 
             img_a.set_shape(shape_a)
             img_b.set_shape(shape_b)
@@ -94,7 +94,7 @@ def test_input_fn_builder(subset=-1, data_format='channels_first', batch_size=10
 
     def test_input_fn():
         def set_image_shape(image, label):
-            shape = (batch_size, *image_shape)
+            shape = (batch_size,) + image_shape
 
             image.set_shape(shape)
 
