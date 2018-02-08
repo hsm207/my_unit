@@ -1,5 +1,5 @@
 # my_unit
-My implementation of the SHVN -> MNIST domain adaptation model of the [Unsupervised Image-to-Image Translation Networks](https://arxiv.org/pdf/1703.00848.pdf) paper.
+My implementation of the SHVN -> MNIST domain adaptation model of the 2017 NIPS paper titled [Unsupervised Image-to-Image Translation Networks](https://arxiv.org/pdf/1703.00848.pdf).
 
 This implementation is in TensorFlow and is based on the author's [PyTorch implementation](https://github.com/mingyuliutw/UNIT).
 
